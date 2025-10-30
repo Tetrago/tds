@@ -75,12 +75,30 @@ inline T IntervalHeap<T, Compare>::pop_front() noexcept
 	{
 		Compare cmp;
 
-		T item = std::exchange(data_[0], data_[(data_.size() - 1) & ~1]);
+		if (data_.size() ^ 1)
+		{
+			std::swap(data_[data_.size() - 2], data_[data_.size() - 1]);
+		}
+
+		T item = std::exchange(data_[0], std::move(data_[data_.size() - 1]));
 		data_.pop_back();
 
-		// TODO:
+		for (int index = 0;;)
+		{
+			T& item = data_[index];
+			index   = index * 2 + 1;
 
-		return item;
+			if ((index * 2 < data_.size() && cmp(data_[index * 2], item)) ||
+			    (index +=
+			     1 && index * 2 < data_.size() && cmp(data_[index * 2], item)))
+			{
+				std::swap(data_[index * 2], item);
+			}
+			else
+			{
+				return item;
+			}
+		}
 	}
 }
 
