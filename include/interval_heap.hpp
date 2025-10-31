@@ -1,5 +1,5 @@
-#ifndef INTERVAL_HEAP_HPP
-#define INTERVAL_HEAP_HPP
+#ifndef TDS_INTERVAL_HEAP_HPP
+#define TDS_INTERVAL_HEAP_HPP
 
 #include <functional>
 #include <utility>
@@ -9,6 +9,8 @@ template <typename T, typename Compare = std::less<T>>
 class IntervalHeap
 {
 public:
+	using value_type = T;
+
 	void insert(T&& item) noexcept;
 	T pop_front() noexcept;
 	T pop_back() noexcept;
@@ -22,17 +24,21 @@ public:
 
 	[[nodiscard]] T& back() noexcept
 	{
-		return data_[std::min(1, data_.size() - 1)];
+		return data_[std::min<typename std::vector<T>::size_type>(
+		    1, data_.size() - 1)];
 	}
 
 	[[nodiscard]] const T& back() const noexcept
 	{
-		return data_[std::min(1, data_.size() - 1)];
+		return data_[std::min<typename std::vector<T>::size_type>(
+		    1, data_.size() - 1)];
 	}
 
 private:
-	void pushMin(int index = 0) noexcept;
-	void pushMax(int index = 0) noexcept;
+	void pushDownMin(int index = 0) noexcept;
+	void pushDownMax(int index = 0) noexcept;
+	void pushUpMin(int index) noexcept;
+	void pushUpMax(int index) noexcept;
 
 	std::vector<T> data_;
 };
@@ -42,20 +48,29 @@ inline void IntervalHeap<T, Compare>::insert(T&& item) noexcept
 {
 	Compare cmp;
 
-	int index = data_.size();
-	data_.insert(std::move(item));
+	data_.push_back(std::move(item));
 
-	if ((index & 1) && cmp(data_[index], data_[index - 1]))
+	if ((data_.size() & 1) && data_.size() > 2)
 	{
-		std::swap(data_[index], data_[index - 1]);
-		index -= 1;
+		if (cmp(data_.back(), data_[(data_.size() - 1) / 4 * 2]))
+		{
+			std::swap(data_.back(), data_[(data_.size() - 1) / 4 * 2]);
+			pushUpMin((data_.size() - 1) / 4);
+		}
+		else if (cmp(data_[(data_.size() - 1) / 4 * 2 + 1], data_.back()))
+		{
+			std::swap(data_.back(), data_[(data_.size() - 1) / 4 * 2 + 1]);
+			pushUpMax((data_.size() - 1) / 4);
+		}
 	}
-
-	while (index > 1 && (((index & 1) && cmp(data_[index / 2], data_[index])) ||
-	                     ((index ^ 1) && cmp(data_[index], data_[index / 2]))))
+	else if (cmp(data_.back(), data_[data_.size() - 2]))
 	{
-		std::swap(data_[index / 2], data_[index]);
-		index /= 2;
+		std::swap(data_.back(), data_[data_.size() - 2]);
+		pushUpMin((data_.size() - 1) / 4 * 2);
+	}
+	else
+	{
+		pushUpMax((data_.size() - 1) / 4 * 2);
 	}
 }
 
@@ -85,7 +100,7 @@ inline T IntervalHeap<T, Compare>::pop_front() noexcept
 
 		T item = std::exchange(data_[0], std::move(data_[data_.size() - 1]));
 		data_.pop_back();
-		pushMin();
+		pushDownMin();
 		return item;
 	}
 }
@@ -103,70 +118,132 @@ inline T IntervalHeap<T, Compare>::pop_back() noexcept
 	{
 		T item = std::exchange(data_[1], std::move(data_.back()));
 		data_.pop_back();
-		pushMax();
+		pushDownMax();
 		return item;
 	}
 }
 
 template <typename T, typename Compare>
 inline void erase(const T& item) noexcept
-{}
+{
+	// TODO:
+}
 
 template <typename T, typename Compare>
-inline void IntervalHeap<T, Compare>::pushMin(int index) noexcept
+inline void IntervalHeap<T, Compare>::pushDownMin(int index) noexcept
 {
 	if (index * 2 >= data_.size())
 	{
 		return;
 	}
 
+	Compare cmp;
+
 	T& item = data_[index * 2];
 	index   = index * 2 + 1;
 
-	if ((index * 2 < data_.size() && Compare{}(data_[index * 2], item)) ||
-	    (index +=
-	     1 && index * 2 < data_.size() && Compare{}(data_[index * 2], item)))
+	if ((index * 2 < data_.size() && cmp(data_[index * 2], item)) ||
+	    (index += 1 && index * 2 < data_.size() && cmp(data_[index * 2], item)))
 	{
 		std::swap(item, data_[index * 2]);
 
-		if (Compare{}(data_[index * 2], data_[index * 2 + 1]))
+		if (cmp(data_[index * 2], data_[index * 2 + 1]))
 		{
 			std::swap(data_[index * 2], data_[index * 2 + 1]);
-			pushMax(index);
+			pushDownMax(index);
 		}
 		else
 		{
-			pushMin(index);
+			pushDownMin(index);
 		}
 	}
 }
 
 template <typename T, typename Compare>
-inline void IntervalHeap<T, Compare>::pushMax(int index) noexcept
+inline void IntervalHeap<T, Compare>::pushDownMax(int index) noexcept
 {
-	if (index * 2 >= data_.size())
+	if (index * 2 + 1 >= data_.size())
 	{
 		return;
 	}
 
+	Compare cmp;
+
 	T& item = data_[index * 2 + 1];
 	index   = index * 2 + 1;
 
-	if ((index * 2 + 1 < data_.size() &&
-	     Compare{}(item, data_[index * 2 + 1])) ||
-	    (index += 1 && index * 2 + 1 < data_.size() &&
-	              Compare{}(item, data_[index * 2 + 1])))
+	if ((index * 2 + 1 < data_.size() && cmp(item, data_[index * 2 + 1])) ||
+	    (index +=
+	     1 && index * 2 + 1 < data_.size() && cmp(item, data_[index * 2 + 1])))
 	{
 		std::swap(item, data_[index * 2 + 1]);
 
-		if (Compare{}(data_[index * 2], data_[index * 2 + 1]))
+		if (cmp(data_[index * 2 + 1], data_[index * 2]))
 		{
 			std::swap(data_[index * 2], data_[index * 2 + 1]);
-			pushMin(index);
+			pushDownMin(index);
 		}
 		else
 		{
-			pushMax(index);
+			pushDownMax(index);
+		}
+	}
+}
+
+template <typename T, typename Compare>
+inline void IntervalHeap<T, Compare>::pushUpMin(int index) noexcept
+{
+	if (index == 0)
+	{
+		return;
+	}
+
+	Compare cmp;
+
+	T& item  = data_[index * 2];
+	index   /= 2;
+
+	if (cmp(data_[index * 2], item))
+	{
+		std::swap(data_[index * 2], item);
+
+		if (cmp(data_[index * 2 + 1], data_[index * 2]))
+		{
+			std::swap(data_[index * 2], data_[index * 2 + 1]);
+			pushUpMax(index);
+		}
+		else
+		{
+			pushUpMin(index);
+		}
+	}
+}
+
+template <typename T, typename Compare>
+inline void IntervalHeap<T, Compare>::pushUpMax(int index) noexcept
+{
+	if (index == 0)
+	{
+		return;
+	}
+
+	Compare cmp;
+
+	T& item  = data_[index * 2 + 1];
+	index   /= 2;
+
+	if (cmp(data_[index * 2 + 1], item))
+	{
+		std::swap(data_[index * 2 + 1], item);
+
+		if (cmp(data_[index * 2 + 1], data_[index * 2]))
+		{
+			std::swap(data_[index * 2], data_[index * 2 + 1]);
+			pushUpMin(index);
+		}
+		else
+		{
+			pushUpMax(index);
 		}
 	}
 }
