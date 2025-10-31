@@ -16,13 +16,9 @@ int main()
 	std::cout << heap.back() << std::endl;
 
 	heap.pop_front();
-
 	std::cout << heap.front() << std::endl;
-	std::cout << heap.back() << std::endl;
 
 	heap.pop_back();
-
-	std::cout << heap.front() << std::endl;
 	std::cout << heap.back() << std::endl;
 
 	return 0;
